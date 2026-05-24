@@ -261,8 +261,18 @@ def run_agent(
                 wt.remove(repo_path, worktree_path)
 
             diff = ""
+            wt_head_export = ""
             if can_modify and head_before and wt_head_after and wt_head_after != head_before:
-                diff = _propagate_commits(repo_path, wt_head_after, head_before, agent_id)
+                if role_config.get("no_propagate"):
+                    # Keep commits in object store; export diff+hash for selector to cherry-pick
+                    diff = subprocess.run(
+                        ["git", "diff", f"{head_before}..{wt_head_after}"],
+                        cwd=repo_path, capture_output=True, text=True,
+                    ).stdout[:6000]
+                    wt_head_export = wt_head_after
+                    print(f"[{agent_id}] stored diff ({len(diff)}b) wt_head={wt_head_after[:8]}", flush=True)
+                else:
+                    diff = _propagate_commits(repo_path, wt_head_after, head_before, agent_id)
 
             parsed = _parse_output(output)
             if isinstance(parsed, list):
@@ -276,6 +286,8 @@ def run_agent(
                 payload: dict = {"content": content, "from_signal": signal.id}
                 if diff:
                     payload["diff"] = diff
+                if wt_head_export:
+                    payload["wt_head"] = wt_head_export
                 board.write(Signal(type=signal_type, payload=payload, from_role=role_name))
                 print(f"[{agent_id}] wrote {signal_type}", flush=True)
 

@@ -1,24 +1,20 @@
 label: Swarm
-description: researcher → 2×coder → security → reviewer
-mode: swarm
+description: N coders work independently → selector picks best → reviewer
 stop_signal: DONE
 definitions: definitions.yaml
 
 groups:
 
-  - name: analysis
-    roles:
-      - role: researcher
-        count: 1
-
-  - name: development
+  - name: coding
     roles:
       - role: coder
-        count: 2
+        count: 3
+        fan_out: true
+        no_propagate: true
 
-  - name: security
+  - name: selection
     roles:
-      - role: security_analyst
+      - role: selector
         count: 1
 
   - name: quality

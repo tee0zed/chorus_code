@@ -1,6 +1,5 @@
 label: Cooperative
-description: planner + 3×developer + security + integrator
-mode: cooperative
+description: decomposer splits task → N developers work in parallel → integrator → reviewer
 stop_signal: DONE
 definitions: definitions.yaml
 
@@ -8,22 +7,20 @@ groups:
 
   - name: planning
     roles:
-      - role: planner
+      - role: decomposer
         count: 1
 
-  - name: dev
+  - name: development
     roles:
       - role: developer
         count: 3
 
-  - name: security
-    roles:
-      - role: security_analyst
-        count: 1
-        responds_to: [SUBTASK_DONE]
-        produces: SECURITY_DONE
-
   - name: integration
     roles:
       - role: integrator
+        count: 1
+
+  - name: quality
+    roles:
+      - role: reviewer
         count: 1
