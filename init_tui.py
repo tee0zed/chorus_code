@@ -76,34 +76,37 @@ def _pick_repo() -> str:
 
 def _load_yaml(path: str) -> dict:
     import yaml
-    with open(path) as f:
-        return yaml.safe_load(f)
+    try:
+        with open(path) as f:
+            raw = yaml.safe_load(f)
+    except Exception as e:
+        console.print(f"\n  [red]Cannot parse config {path}:[/red] {e}")
+        sys.exit(1)
+    if not raw or not isinstance(raw, dict):
+        console.print(f"\n  [red]Config is empty or invalid:[/red] {path}")
+        sys.exit(1)
+    return raw
 
 
-def _is_run_config(raw: dict) -> bool:
-    """True if yaml is a runnable config (has groups or roles), not a definitions file."""
-    return "groups" in raw or "roles" in raw
-
-def _is_multimode(raw: dict) -> bool:
-    """True if top-level keys are mode names (not groups/roles/mode)."""
-    return "groups" not in raw and "roles" not in raw
+def _config_modes(raw: dict) -> dict:
+    """Return only the mode entries: top-level keys whose values are dicts with groups/roles."""
+    return {k: v for k, v in raw.items() if isinstance(v, dict) and ("groups" in v or "roles" in v)}
 
 
 def _pick_config_file() -> str:
-    """Let user pick a runnable yaml file from roles/. Excludes definitions files."""
+    """Let user pick a multimode yaml config from roles/."""
     import yaml as _yaml
     all_yamls = sorted(ROLES_DIR.glob("*.yaml"))
-    # Filter out pure definition files (only have top-level "roles" key, no "mode"/"groups")
     yamls = []
     for y in all_yamls:
         try:
             data = _yaml.safe_load(y.read_text())
-            if isinstance(data, dict) and ("groups" in data or "mode" in data or "roles" in data):
+            if isinstance(data, dict) and _config_modes(data):
                 yamls.append(y)
         except Exception:
             pass
     if not yamls:
-        console.print(f"  [red]No configs in {ROLES_DIR}[/red]")
+        console.print(f"  [red]No valid configs in {ROLES_DIR}[/red]")
         sys.exit(1)
     if len(yamls) == 1:
         console.print(f"  [dim]→ config: {yamls[0].name}[/dim]")
@@ -122,8 +125,8 @@ def _pick_config_file() -> str:
 
 
 def _pick_mode(config_path: str, raw: dict) -> str:
-    """Pick mode from a multi-mode yaml. Returns mode key."""
-    modes = {k: v for k, v in raw.items()}
+    """Pick mode from a multimode yaml. Returns mode key."""
+    modes = _config_modes(raw)
     keys = list(modes.keys())
 
     console.print("  [bold]Mode:[/bold]")
@@ -201,15 +204,16 @@ def run() -> SwarmConfig:
 
     config_path = _pick_config_file()
     raw = _load_yaml(config_path)
-    console.print()
 
-    if _is_multimode(raw):
-        mode = _pick_mode(config_path, raw)
-        mode_cfg = raw[mode]
-        console.print()
-    else:
-        mode = ""
-        mode_cfg = raw
+    modes = _config_modes(raw)
+    if not modes:
+        console.print(f"\n  [red]Config has no valid modes:[/red] {config_path}")
+        sys.exit(1)
+
+    console.print()
+    mode = _pick_mode(config_path, raw)
+    mode_cfg = raw[mode]
+    console.print()
 
     repo    = _pick_repo()
     task    = _pick_task()

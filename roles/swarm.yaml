@@ -1,25 +1,42 @@
-mode: swarm
-stop_signal: DONE
-definitions: definitions.yaml
+lean:
+  label: Lean
+  description: researcher → coder → reviewer
+  stop_signal: DONE
+  definitions: definitions.yaml
+  groups:
+    - name: analysis
+      roles:
+        - role: researcher
+          count: 1
+    - name: development
+      roles:
+        - role: coder
+          count: 1
+    - name: quality
+      roles:
+        - role: reviewer
+          count: 1
+          responds_to: [CODE_READY]
 
-groups:
-
-  - name: analysis
-    roles:
-      - role: researcher
-        count: 1
-
-  - name: development
-    roles:
-      - role: coder
-        count: 2
-
-  - name: security
-    roles:
-      - role: security_analyst
-        count: 1
-
-  - name: quality
-    roles:
-      - role: reviewer
-        count: 1
+secure:
+  label: Secure
+  description: researcher → 2×coder → security → reviewer
+  stop_signal: DONE
+  definitions: definitions.yaml
+  groups:
+    - name: analysis
+      roles:
+        - role: researcher
+          count: 1
+    - name: development
+      roles:
+        - role: coder
+          count: 2
+    - name: security
+      roles:
+        - role: security_analyst
+          count: 1
+    - name: quality
+      roles:
+        - role: reviewer
+          count: 1
