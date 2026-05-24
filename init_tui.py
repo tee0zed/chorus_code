@@ -53,23 +53,23 @@ def _pick_repo() -> str:
     cwd = str(Path.cwd())
     if _is_git_repo(cwd):
         default = cwd
-        hint = f"[dim](текущая директория: {cwd})[/dim]"
+        hint = f"[dim](current directory: {cwd})[/dim]"
     else:
         default = ""
-        hint = "[yellow]текущая директория не git-репозиторий[/yellow]"
+        hint = "[yellow]current directory is not a git repo[/yellow]"
 
-    console.print(f"  Репозиторий  {hint}")
+    console.print(f"  Repository  {hint}")
     while True:
-        repo = Prompt.ask("  Путь", default=default or None, console=console)
+        repo = Prompt.ask("  Path", default=default or None, console=console)
         if not repo:
-            console.print("  [red]Укажи путь к репозиторию[/red]")
+            console.print("  [red]Specify repository path[/red]")
             continue
         repo = str(Path(repo).expanduser().resolve())
         if not Path(repo).exists():
-            console.print(f"  [red]Путь не существует: {repo}[/red]")
+            console.print(f"  [red]Path does not exist: {repo}[/red]")
             continue
         if not _is_git_repo(repo):
-            console.print(f"  [red]Не git-репозиторий: {repo}[/red]")
+            console.print(f"  [red]Not a git repository: {repo}[/red]")
             continue
         return repo
 
@@ -98,27 +98,27 @@ def _pick_config_file() -> str:
     for y in all_yamls:
         try:
             data = _yaml.safe_load(y.read_text())
-            if isinstance(data, dict) and ("groups" in data or "mode" in data):
+            if isinstance(data, dict) and ("groups" in data or "mode" in data or "roles" in data):
                 yamls.append(y)
         except Exception:
             pass
     if not yamls:
-        console.print(f"  [red]Нет конфигов в {ROLES_DIR}[/red]")
+        console.print(f"  [red]No configs in {ROLES_DIR}[/red]")
         sys.exit(1)
     if len(yamls) == 1:
-        console.print(f"  [dim]→ конфиг: {yamls[0].name}[/dim]")
+        console.print(f"  [dim]→ config: {yamls[0].name}[/dim]")
         return str(yamls[0])
-    console.print("  [bold]Конфиг:[/bold]")
+    console.print("  [bold]Config:[/bold]")
     for i, y in enumerate(yamls, 1):
         console.print(f"    [cyan]{i}[/cyan]  {y.name}")
     while True:
-        raw = Prompt.ask("  Номер или путь", default="1", console=console)
+        raw = Prompt.ask("  Number or path", default="1", console=console)
         if raw.isdigit() and 0 <= int(raw) - 1 < len(yamls):
             return str(yamls[int(raw) - 1])
         p = Path(raw).expanduser()
         if p.exists():
             return str(p)
-        console.print("  [red]Не нашёл[/red]")
+        console.print("  [red]Not found[/red]")
 
 
 def _pick_mode(config_path: str, raw: dict) -> str:
@@ -126,7 +126,7 @@ def _pick_mode(config_path: str, raw: dict) -> str:
     modes = {k: v for k, v in raw.items()}
     keys = list(modes.keys())
 
-    console.print("  [bold]Режим работы:[/bold]")
+    console.print("  [bold]Mode:[/bold]")
     for i, key in enumerate(keys, 1):
         meta = modes[key]
         label = meta.get("label", key)
@@ -135,12 +135,12 @@ def _pick_mode(config_path: str, raw: dict) -> str:
     console.print()
 
     while True:
-        choice = Prompt.ask("  Режим", default="1", console=console)
+        choice = Prompt.ask("  Mode", default="1", console=console)
         if choice.isdigit() and 0 <= int(choice) - 1 < len(keys):
             return keys[int(choice) - 1]
         if choice in keys:
             return choice
-        console.print(f"  [red]Введи число от 1 до {len(keys)}[/red]")
+        console.print(f"  [red]Enter a number from 1 to {len(keys)}[/red]")
 
 
 def _pick_agents(mode_cfg: dict) -> str:
@@ -158,24 +158,24 @@ def _pick_agents(mode_cfg: dict) -> str:
     role_names = [name for name, _ in parts]
     default = mode_cfg.get("default_agents") or ",".join(f"{n}:{c}" for n, c in parts)
     console.print()
-    console.print(f"  [bold]Агенты[/bold]  [dim]формат: роль:количество[/dim]")
-    console.print(f"  [dim]доступные роли: {', '.join(role_names)}[/dim]")
-    return Prompt.ask("  Состав", default=default, console=console)
+    console.print(f"  [bold]Agents[/bold]  [dim]format: role:count[/dim]")
+    console.print(f"  [dim]available roles: {', '.join(role_names)}[/dim]")
+    return Prompt.ask("  Composition", default=default, console=console)
 
 
 def _pick_task() -> str:
     console.print()
-    console.print("  [bold]Задача[/bold]")
+    console.print("  [bold]Task[/bold]")
     while True:
-        task = Prompt.ask("  Описание", console=console)
+        task = Prompt.ask("  Description", console=console)
         if task.strip():
             return task.strip()
-        console.print("  [red]Задача не может быть пустой[/red]")
+        console.print("  [red]Task cannot be empty[/red]")
 
 
 def _pick_timeout() -> int:
     console.print()
-    raw = Prompt.ask("  Таймаут (сек)", default="600", console=console)
+    raw = Prompt.ask("  Timeout (sec)", default="600", console=console)
     try:
         return int(raw)
     except ValueError:
@@ -193,7 +193,7 @@ def _summary(cfg: SwarmConfig):
     t.add_row("agents",  cfg.agents)
     t.add_row("timeout", f"{cfg.timeout}s")
     t.add_row("task",    Text(cfg.task, style="bold"))
-    console.print(Panel(t, title="Параметры запуска", border_style="blue"))
+    console.print(Panel(t, title="Launch parameters", border_style="blue"))
 
 
 def run() -> SwarmConfig:
@@ -223,8 +223,8 @@ def run() -> SwarmConfig:
     _summary(cfg)
 
     console.print()
-    if not Confirm.ask("  Запустить?", default=True, console=console):
-        console.print("  [dim]Отменено.[/dim]")
+    if not Confirm.ask("  Launch?", default=True, console=console):
+        console.print("  [dim]Cancelled.[/dim]")
         sys.exit(0)
 
     console.print()

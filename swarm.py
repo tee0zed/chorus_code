@@ -102,7 +102,7 @@ def _write_report(db_path: str, stop_signal: str, log_path: str):
         return
     sep = "=" * 60
     with open(log_path, "a") as f:
-        f.write(f"\n{sep}\n[swarm] ОТЧЁТ:\n{content}\n{sep}\n")
+        f.write(f"\n{sep}\n[swarm] REPORT:\n{content}\n{sep}\n")
 
 
 def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
@@ -163,11 +163,11 @@ def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
         for p in processes:
             p.join(timeout=5)
         if not completed:
-            print(f"Завершено (без stop_signal). log: {log_path}")
+            print(f"Completed (no stop_signal). log: {log_path}")
             return None
-        print(f"\nЗадача завершена. log: {log_path}\n")
+        print(f"\nTask completed. log: {log_path}\n")
         try:
-            return input("Следующая задача (Enter — выход): ").strip() or None
+            return input("Next task (Enter — exit): ").strip() or None
         except (EOFError, KeyboardInterrupt):
             return None
 

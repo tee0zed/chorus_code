@@ -59,7 +59,7 @@ def write_claude_md(
 ) -> None:
     template_path = Path(__file__).parent / "templates" / "claude_md.j2"
     template = template_path.read_text()
-    patterns_text = "\n".join(f"  - {p}" for p in can_modify) if can_modify else "  (нет — только чтение)"
+    patterns_text = "\n".join(f"  - {p}" for p in can_modify) if can_modify else "  (none — read only)"
     content = (
         template
         .replace("{{role_name}}", role_name)

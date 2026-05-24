@@ -62,8 +62,8 @@ class _SwarmApp(App):
     """
 
     BINDINGS = [
-        ("escape", "quit_app", "Выход"),
-        ("ctrl+l", "copy_log_path", "Скопировать путь лога"),
+        ("escape", "quit_app", "Quit"),
+        ("ctrl+l", "copy_log_path", "Copy log path"),
     ]
 
     def __init__(self, db_path: str, task: str, run_id: str, log_path: str):
@@ -82,19 +82,19 @@ class _SwarmApp(App):
         yield DataTable(id="signals", zebra_stripes=True)
         yield DataTable(id="locks")
         with Horizontal(id="footer"):
-            yield Label("Следующая задача:")
+            yield Label("Next task:")
             yield Input(
-                placeholder="опиши задачу (Enter — запустить, Esc — выход)",
+                placeholder="describe task (Enter — start, Esc — exit)",
                 id="task-input",
             )
 
     def on_mount(self) -> None:
         sig = self.query_one("#signals", DataTable)
-        sig.add_columns("Сигнал", "Статус", "От", "Время")
+        sig.add_columns("Signal", "Status", "From", "Time")
         lk = self.query_one("#locks", DataTable)
-        lk.add_columns("Файл", "Агент")
+        lk.add_columns("File", "Agent")
 
-        self.query_one("#log", RichLog).border_title = "Лог агентов  [dim](Ctrl+L — путь к файлу)[/]"
+        self.query_one("#log", RichLog).border_title = "Agent log  [dim](Ctrl+L — copy path)[/]"
         self.query_one("#signals", DataTable).border_title = "Blackboard"
         self.query_one("#locks", DataTable).border_title = "File Locks"
         self.set_interval(0.5, self._tick)
@@ -111,7 +111,7 @@ class _SwarmApp(App):
 
     def action_copy_log_path(self) -> None:
         self.copy_to_clipboard(str(self.log_path))
-        self.notify(f"Скопировано: {self.log_path}", severity="information")
+        self.notify(f"Copied: {self.log_path}", severity="information")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.exit(event.value.strip() or None)
@@ -135,12 +135,12 @@ class _SwarmApp(App):
 
     def _upd_header(self) -> None:
         task_s = self._task[:80] + "…" if len(self._task) > 80 else self._task
-        done = "  [bold green]✓ ЗАВЕРШЕНО[/]" if self._complete else ""
+        done = "  [bold green]✓ DONE[/]" if self._complete else ""
         self.query_one("#header", Static).update(
             f"[bold cyan]Agent Swarm[/]  [dim]run:{self.run_id}[/]"
             f"  [cyan]{self._elapsed()}[/]{done}\n"
             f"[dim]{task_s}[/]\n"
-            f"[dim]лог: {self.log_path}[/]"
+            f"[dim]log: {self.log_path}[/]"
         )
 
     def _upd_signals(self) -> None:
@@ -172,7 +172,7 @@ class _SwarmApp(App):
         for fp, agent in locks.items():
             dt.add_row(fp, Text(agent, style="cyan"))
         if not locks:
-            dt.add_row(Text("(нет)", style="dim"), "")
+            dt.add_row(Text("(none)", style="dim"), "")
 
     def _upd_log(self) -> None:
         log = self.query_one("#log", RichLog)
@@ -202,7 +202,7 @@ class _SwarmApp(App):
                 log.write(t)
             elif "=" * 10 in line:
                 log.write(Text(line, style="bold green"))
-            elif "ОТЧЁТ" in line:
+            elif "REPORT" in line:
                 log.write(Text(line, style="bold green"))
             elif "ERROR" in line or "FATAL" in line:
                 log.write(Text(line, style="bold red"))

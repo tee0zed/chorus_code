@@ -230,13 +230,18 @@ def run_agent(
 
             if can_modify:
                 locked_files = locks.get_all_locks()
+                # Global mutex: block if ANY lock is held by another agent.
+                # This prevents git cherry-pick conflicts on overlapping file sets.
                 blocked = [f for f, holder in locked_files.items() if holder != agent_id]
                 if blocked:
                     print(f"[{agent_id}] waiting, locked by others: {blocked}", flush=True)
                     board.unclaim(signal.id)
                     time.sleep(5)
                     continue
-                locks.acquire(f"__signal__{signal.id}", agent_id)
+                if not locks.acquire(f"__signal__{signal.id}", agent_id):
+                    board.unclaim(signal.id)
+                    time.sleep(2)
+                    continue
 
             # Fresh worktree from current HEAD — sees all previous agents' commits
             worktree_path = str(Path(run_dir) / f"{agent_id}-{signal.id[:8]}")

@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -47,7 +47,7 @@ class Blackboard:
     def claim_next(self, responds_to: list[str], agent_id: str) -> Optional[Signal]:
         """Atomically claim the oldest open signal of matching type."""
         placeholders = ",".join("?" * len(responds_to))
-        timeout_cutoff = (datetime.utcnow() - timedelta(seconds=CLAIM_TIMEOUT_SECONDS)).isoformat()
+        timeout_cutoff = (datetime.now(timezone.utc) - timedelta(seconds=CLAIM_TIMEOUT_SECONDS)).isoformat()
 
         with self._connect() as conn:
             conn.execute("BEGIN EXCLUSIVE")
@@ -64,7 +64,7 @@ class Blackboard:
             ).fetchone()
             if row is None:
                 return None
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             conn.execute(
                 "UPDATE signals SET status='claimed', claimed_by=?, claimed_at=? WHERE id=?",
                 (agent_id, now, row["id"]),
