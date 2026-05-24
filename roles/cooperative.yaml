@@ -1,44 +1,29 @@
-focused:
-  label: Focused
-  description: planner + 2×developer + integrator
-  stop_signal: DONE
-  definitions: definitions.yaml
-  groups:
-    - name: planning
-      roles:
-        - role: planner
-          count: 1
-    - name: dev
-      roles:
-        - role: developer
-          count: 2
-    - name: integration
-      roles:
-        - role: integrator
-          count: 1
-          responds_to: [SUBTASK_DONE, WAITING_FOR_SUBTASKS]
+label: Cooperative
+description: planner + 3×developer + security + integrator
+mode: cooperative
+stop_signal: DONE
+definitions: definitions.yaml
 
-thorough:
-  label: Thorough
-  description: planner + 3×developer + security + integrator
-  stop_signal: DONE
-  definitions: definitions.yaml
-  groups:
-    - name: planning
-      roles:
-        - role: planner
-          count: 1
-    - name: dev
-      roles:
-        - role: developer
-          count: 3
-    - name: security
-      roles:
-        - role: security_analyst
-          count: 1
-          responds_to: [SUBTASK_DONE]
-          produces: SECURITY_DONE
-    - name: integration
-      roles:
-        - role: integrator
-          count: 1
+groups:
+
+  - name: planning
+    roles:
+      - role: planner
+        count: 1
+
+  - name: dev
+    roles:
+      - role: developer
+        count: 3
+
+  - name: security
+    roles:
+      - role: security_analyst
+        count: 1
+        responds_to: [SUBTASK_DONE]
+        produces: SECURITY_DONE
+
+  - name: integration
+    roles:
+      - role: integrator
+        count: 1

@@ -75,14 +75,13 @@ def _pick_repo() -> str:
 
 
 
-def _config_modes(raw: dict) -> dict:
-    """Return only the mode entries: top-level keys whose values are dicts with groups/roles."""
-    return {k: v for k, v in raw.items() if isinstance(v, dict) and ("groups" in v or "roles" in v)}
-
-
 def _pick_mode_global() -> tuple[str, str, dict]:
     """Scan all yaml configs, show a flat list of all modes with descriptions.
-    Returns (config_path, mode_key, mode_cfg)."""
+    Returns (config_path, mode_key, mode_cfg).
+    Handles two formats:
+      - single-mode: groups/roles at root → one entry per file
+      - multimode:   top-level keys are mode dicts → one entry per mode
+    """
     import yaml as _yaml
 
     entries: list[tuple[Path, str, dict]] = []  # (yaml_path, mode_key, mode_cfg)
@@ -95,8 +94,14 @@ def _pick_mode_global() -> tuple[str, str, dict]:
         if not data or not isinstance(data, dict):
             console.print(f"\n  [red]Config is empty or invalid:[/red] {y.name}")
             sys.exit(1)
-        for key, cfg in _config_modes(data).items():
-            entries.append((y, key, cfg))
+        if "groups" in data:
+            # Single-mode runnable config — the file itself is the mode
+            entries.append((y, "", data))
+        else:
+            # Multimode — each sub-key with groups/roles is a mode
+            for key, cfg in data.items():
+                if isinstance(cfg, dict) and ("groups" in cfg or "roles" in cfg):
+                    entries.append((y, key, cfg))
 
     if not entries:
         console.print(f"  [red]No valid modes found in {ROLES_DIR}[/red]")
@@ -104,7 +109,7 @@ def _pick_mode_global() -> tuple[str, str, dict]:
 
     console.print("  [bold]Mode:[/bold]")
     for i, (y, key, cfg) in enumerate(entries, 1):
-        label = cfg.get("label", key)
+        label = cfg.get("label", key or y.stem)
         desc  = cfg.get("description", "")
         console.print(f"    [cyan]{i}[/cyan]  [bold]{label}[/bold]  [dim]{desc}[/dim]")
     console.print()
