@@ -1,5 +1,4 @@
 import re
-import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +10,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import DataTable, Input, Label, RichLog, Static
 
+from blackboard import Blackboard
 from filelock import FileLockManager
 
 _AGENT_PALETTE = [
@@ -147,19 +147,13 @@ class _SwarmApp(App):
         dt = self.query_one("#signals", DataTable)
         dt.clear()
         try:
-            conn = sqlite3.connect(self.db_path, timeout=3)
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT type, status, from_role, created_at, claimed_by "
-                "FROM signals ORDER BY created_at DESC LIMIT 60"
-            ).fetchall()
-            conn.close()
+            rows = list(reversed(Blackboard(self.db_path).get_all_signals(limit=60)))
         except Exception:
             return
         for r in rows:
             color = _STATUS_COLOR.get(r["status"], "")
-            ts = (r["created_at"] or "")[:19].replace("T", " ")
-            from_label = r["claimed_by"] if r["status"] == "claimed" else r["from_role"]
+            ts = (r["at"] or "")[:19].replace("T", " ")
+            from_label = r["claimed_by"] if r["status"] == "claimed" else r["from"]
             dt.add_row(r["type"], Text(r["status"], style=color), from_label or "-", ts)
 
     def _upd_locks(self) -> None:

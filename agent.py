@@ -23,11 +23,11 @@ def _strip_ansi(s: str) -> str:
 def _build_prompt(task: str, role_config: dict, signal: Signal, context: list) -> str:
     context_text = json.dumps(context, ensure_ascii=False, indent=2) if context else "[]"
     payload_text = json.dumps(signal.payload, ensure_ascii=False, indent=2)
-    return role_config["prompt"].format(
-        task=task,
-        context=context_text,
-        signal_payload=payload_text,
-    )
+    prompt = role_config["prompt"]
+    prompt = prompt.replace("{task}", task)
+    prompt = prompt.replace("{context}", context_text)
+    prompt = prompt.replace("{signal_payload}", payload_text)
+    return prompt
 
 
 def _parse_output(output: str) -> list[dict] | dict | None:

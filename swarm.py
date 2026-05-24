@@ -8,10 +8,8 @@ Usage:
                   [--timeout 1800] [--no-tui]
 """
 import argparse
-import json
 import multiprocessing
 import os
-import sqlite3
 import sys
 import threading
 import time
@@ -85,19 +83,14 @@ def _agent_worker(role_config, task, repo_path, db_path, run_dir, stop_signal, l
 
 
 def _write_report(db_path: str, stop_signal: str, log_path: str):
-    """Extract integrator's final content from stop signal and append to log."""
+    """Extract final content from stop signal and append to log."""
     try:
-        conn = sqlite3.connect(db_path, timeout=5)
-        row = conn.execute(
-            "SELECT payload FROM signals WHERE type=? ORDER BY created_at DESC LIMIT 1",
-            (stop_signal,),
-        ).fetchone()
-        conn.close()
+        sig = Blackboard(db_path).get_last(stop_signal)
     except Exception:
         return
-    if not row:
+    if not sig:
         return
-    content = json.loads(row[0]).get("content", "").strip()
+    content = sig.get("payload", {}).get("content", "").strip()
     if not content:
         return
     sep = "=" * 60
@@ -110,7 +103,7 @@ def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
     run_id = uuid.uuid4().hex[:8]
     run_dir = f"/tmp/swarm-{run_id}"
     os.makedirs(run_dir, exist_ok=True)
-    db_path = f"{run_dir}/blackboard.db"
+    db_path = f"{run_dir}/blackboard"
     log_path = f"{run_dir}/swarm.log"
 
     board = Blackboard(db_path)
