@@ -162,15 +162,27 @@ def _propagate_commits(repo_path: str, wt_head: str, original_head: str, agent_i
         if not new_commits:
             return ""
 
-        for commit in new_commits:
-            result = subprocess.run(
-                ["git", "cherry-pick", "--allow-empty", commit],
-                cwd=repo_path, capture_output=True, text=True,
-            )
-            if result.returncode != 0:
-                subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo_path, capture_output=True)
-                print(f"[{agent_id}] cherry-pick conflict on {commit[:8]}, skipping", flush=True)
-                return ""
+        # Stash dirty working tree so cherry-pick doesn't fail on conflicts with
+        # uncommitted changes that aren't part of the agent's work.
+        stash_result = subprocess.run(
+            ["git", "stash", "--include-untracked", "-m", f"propagate-{agent_id}"],
+            cwd=repo_path, capture_output=True, text=True,
+        )
+        stashed = stash_result.returncode == 0 and "No local changes" not in stash_result.stdout
+
+        try:
+            for commit in new_commits:
+                result = subprocess.run(
+                    ["git", "cherry-pick", "--allow-empty", commit],
+                    cwd=repo_path, capture_output=True, text=True,
+                )
+                if result.returncode != 0:
+                    subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo_path, capture_output=True)
+                    print(f"[{agent_id}] cherry-pick conflict on {commit[:8]}, skipping", flush=True)
+                    return ""
+        finally:
+            if stashed:
+                subprocess.run(["git", "stash", "pop"], cwd=repo_path, capture_output=True)
 
         diff = subprocess.run(
             ["git", "diff", f"{original_head}..HEAD"],
