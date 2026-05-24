@@ -8,8 +8,10 @@ Usage:
                   [--timeout 1800] [--no-tui]
 """
 import argparse
+import json
 import multiprocessing
 import os
+import sqlite3
 import sys
 import threading
 import time
@@ -22,6 +24,7 @@ from agent import run_agent
 from blackboard import Blackboard
 from models import Signal
 from monitor import SwarmMonitor
+import worktree as wt
 
 
 def parse_agents_arg(agents_str: str) -> list[tuple[str, int]]:
@@ -61,7 +64,6 @@ def load_config(config_path: str, mode: str | None = None) -> dict:
             for entry in group["roles"]:
                 role_name = entry["role"]
                 count = entry.get("count", 1)
-                # Start from definition, apply overrides from group entry
                 base = dict(definitions.get(role_name, {"name": role_name}))
                 overrides = {k: v for k, v in entry.items() if k not in ("role", "count")}
                 merged = {**base, **overrides, "name": role_name}
@@ -73,7 +75,6 @@ def load_config(config_path: str, mode: str | None = None) -> dict:
 
 
 def _agent_worker(role_config, task, repo_path, db_path, run_dir, stop_signal, log_path):
-    """Wrapper that redirects agent stdout/stderr to the shared log file."""
     with open(log_path, "a", buffering=1) as log:
         sys.stdout = log
         sys.stderr = log
@@ -81,6 +82,133 @@ def _agent_worker(role_config, task, repo_path, db_path, run_dir, stop_signal, l
             run_agent(role_config, task, repo_path, db_path, run_dir, stop_signal)
         except Exception as e:
             print(f"[agent] FATAL: {e}", flush=True)
+
+
+def _write_report(db_path: str, stop_signal: str, log_path: str):
+    """Extract integrator's final content from stop signal and append to log."""
+    try:
+        conn = sqlite3.connect(db_path, timeout=5)
+        row = conn.execute(
+            "SELECT payload FROM signals WHERE type=? ORDER BY created_at DESC LIMIT 1",
+            (stop_signal,),
+        ).fetchone()
+        conn.close()
+    except Exception:
+        return
+    if not row:
+        return
+    content = json.loads(row[0]).get("content", "").strip()
+    if not content:
+        return
+    sep = "=" * 60
+    with open(log_path, "a") as f:
+        f.write(f"\n{sep}\n[swarm] ОТЧЁТ:\n{content}\n{sep}\n")
+
+
+def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
+    """Run one swarm iteration. Returns next task or None to exit."""
+    run_id = uuid.uuid4().hex[:8]
+    run_dir = f"/tmp/swarm-{run_id}"
+    os.makedirs(run_dir, exist_ok=True)
+    db_path = f"{run_dir}/blackboard.db"
+    log_path = f"{run_dir}/swarm.log"
+
+    board = Blackboard(db_path)
+    board.write(Signal(type="TASK_DEFINED", payload={"task": args.task}, from_role="orchestrator"))
+
+    agent_specs = parse_agents_arg(args.agents)
+    for role_name, count in agent_specs:
+        role = roles_by_name.get(role_name, {})
+        if role.get("fan_out") and count > 1:
+            for _ in range(count - 1):
+                board.write(Signal(type="TASK_DEFINED", payload={"task": args.task}, from_role="orchestrator"))
+
+    processes: list[multiprocessing.Process] = []
+    for role_name, count in agent_specs:
+        if role_name not in roles_by_name:
+            with open(log_path, "a") as f:
+                f.write(f"[swarm] WARNING: role '{role_name}' not in config, skipping\n")
+            continue
+        role_config = roles_by_name[role_name]
+        for _ in range(count):
+            p = multiprocessing.Process(
+                target=_agent_worker,
+                args=(role_config, args.task, args.repo, db_path, run_dir, stop_signal, log_path),
+                daemon=True,
+            )
+            p.start()
+            processes.append(p)
+
+    with open(log_path, "a") as f:
+        f.write(f"[swarm] run_id={run_id}  db={db_path}\n")
+        f.write(f"[swarm] {len(processes)} agents started\n")
+
+    if args.no_tui:
+        # No TUI: watch loop runs in main thread
+        deadline = time.time() + args.timeout
+        completed = False
+        try:
+            while time.time() < deadline:
+                if board.has_signal_of_type(stop_signal):
+                    _write_report(db_path, stop_signal, log_path)
+                    completed = True
+                    break
+                if not any(p.is_alive() for p in processes):
+                    break
+                time.sleep(2)
+        except KeyboardInterrupt:
+            pass
+        for p in processes:
+            p.terminate()
+        for p in processes:
+            p.join(timeout=5)
+        if not completed:
+            print(f"Завершено (без stop_signal). log: {log_path}")
+            return None
+        print(f"\nЗадача завершена. log: {log_path}\n")
+        try:
+            return input("Следующая задача (Enter — выход): ").strip() or None
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+    # TUI mode: textual MUST run in main thread.
+    # Swarm watcher runs in background thread and signals the TUI when done.
+    stop_event = threading.Event()  # set on abnormal termination → TUI closes
+    monitor = SwarmMonitor(db_path, args.task, run_id, log_path)
+
+    def _swarm_watcher() -> None:
+        completed = False
+        deadline = time.time() + args.timeout
+        try:
+            while time.time() < deadline:
+                if board.has_signal_of_type(stop_signal):
+                    with open(log_path, "a") as f:
+                        f.write(f"[swarm] stop signal '{stop_signal}' received\n")
+                    _write_report(db_path, stop_signal, log_path)
+                    completed = True
+                    monitor.set_complete()  # uses call_from_thread internally
+                    return  # don't set stop_event — TUI waits for user input
+                if not any(p.is_alive() for p in processes):
+                    with open(log_path, "a") as f:
+                        f.write("[swarm] all agents finished\n")
+                    break
+                time.sleep(2)
+            else:
+                with open(log_path, "a") as f:
+                    f.write(f"[swarm] timeout after {args.timeout}s\n")
+        finally:
+            for p in processes:
+                p.terminate()
+            for p in processes:
+                p.join(timeout=5)
+            if not completed:
+                stop_event.set()  # tell TUI to exit (abnormal)
+
+    watcher = threading.Thread(target=_swarm_watcher, daemon=True)
+    watcher.start()
+
+    # Blocks in main thread until user exits TUI
+    return monitor.run(stop_event)
 
 
 def main():
@@ -91,10 +219,9 @@ def main():
     parser.add_argument("--mode")
     parser.add_argument("--agents")
     parser.add_argument("--timeout", type=int)
-    parser.add_argument("--no-tui", action="store_true", help="Plain log output instead of TUI")
+    parser.add_argument("--no-tui", action="store_true")
     args = parser.parse_args()
 
-    # Interactive init TUI when required args are missing
     if not args.task:
         from init_tui import run as init_run
         cfg = init_run()
@@ -105,7 +232,6 @@ def main():
         args.agents  = args.agents  or cfg.agents
         args.timeout = args.timeout or cfg.timeout
 
-    # Fill remaining defaults for non-interactive use
     if not args.config:
         args.config = str(Path(__file__).parent / "roles" / "swarm.yaml")
     if not args.timeout:
@@ -119,87 +245,13 @@ def main():
     roles_by_name = {r["name"]: r for r in config["roles"]}
     stop_signal = config.get("stop_signal", "DONE")
 
-    run_id = uuid.uuid4().hex[:8]
-    run_dir = f"/tmp/swarm-{run_id}"
-    os.makedirs(run_dir, exist_ok=True)
-    db_path = f"{run_dir}/blackboard.db"
-    log_path = f"{run_dir}/swarm.log"
+    wt._ensure_commit(args.repo)
 
-    board = Blackboard(db_path)
-    board.write(Signal(
-        type="TASK_DEFINED",
-        payload={"task": args.task},
-        from_role="orchestrator",
-    ))
-
-    agent_specs = parse_agents_arg(args.agents)
-
-    # Fan-out: roles with fan_out:true get one TASK_DEFINED copy per instance
-    for role_name, count in agent_specs:
-        role = roles_by_name.get(role_name, {})
-        if role.get("fan_out") and count > 1:
-            for _ in range(count - 1):
-                board.write(Signal(
-                    type="TASK_DEFINED",
-                    payload={"task": args.task},
-                    from_role="orchestrator",
-                ))
-    processes: list[multiprocessing.Process] = []
-
-    for role_name, count in agent_specs:
-        if role_name not in roles_by_name:
-            with open(log_path, "a") as log:
-                log.write(f"[swarm] WARNING: role '{role_name}' not in config, skipping\n")
-            continue
-        role_config = roles_by_name[role_name]
-        for _ in range(count):
-            p = multiprocessing.Process(
-                target=_agent_worker,
-                args=(role_config, args.task, args.repo, db_path, run_dir, stop_signal, log_path),
-                daemon=True,
-            )
-            p.start()
-            processes.append(p)
-
-    with open(log_path, "a") as log:
-        log.write(f"[swarm] run_id={run_id}  db={db_path}\n")
-        log.write(f"[swarm] {len(processes)} agents started\n")
-
-    stop_event = threading.Event()
-
-    if not args.no_tui:
-        monitor = SwarmMonitor(db_path, args.task, run_id, log_path)
-        tui_thread = threading.Thread(target=monitor.run, args=(stop_event,), daemon=True)
-        tui_thread.start()
-
-    deadline = time.time() + args.timeout
-    try:
-        while time.time() < deadline:
-            if board.has_signal_of_type(stop_signal):
-                with open(log_path, "a") as log:
-                    log.write(f"[swarm] stop signal '{stop_signal}' received\n")
-                break
-            if not any(p.is_alive() for p in processes):
-                with open(log_path, "a") as log:
-                    log.write("[swarm] all agents finished\n")
-                break
-            time.sleep(2)
-        else:
-            with open(log_path, "a") as log:
-                log.write(f"[swarm] timeout after {args.timeout}s\n")
-    except KeyboardInterrupt:
-        pass
-    finally:
-        stop_event.set()
-        for p in processes:
-            p.terminate()
-        for p in processes:
-            p.join(timeout=5)
-        if args.no_tui:
-            print(f"Done. blackboard: {db_path}  log: {log_path}")
-        else:
-            tui_thread.join(timeout=2)
-            print(f"\nDone. blackboard: {db_path}\n      log:        {log_path}")
+    while True:
+        next_task = _run_swarm(args, roles_by_name, stop_signal)
+        if not next_task:
+            break
+        args.task = next_task
 
 
 if __name__ == "__main__":

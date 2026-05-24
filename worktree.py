@@ -19,7 +19,6 @@ def _ensure_commit(repo_path: str) -> None:
 
 
 def add(repo_path: str, worktree_path: str, branch: str = "HEAD") -> None:
-    _ensure_commit(repo_path)
     subprocess.run(
         ["git", "worktree", "add", "--detach", worktree_path, branch],
         cwd=repo_path,
