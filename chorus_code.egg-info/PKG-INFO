@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: chorus-code
+Version: 0.1.0
+Summary: Multi-agent development swarm powered by Claude Code and git worktrees
+Requires-Python: >=3.11
+Requires-Dist: rich>=13.0
+Requires-Dist: pyyaml

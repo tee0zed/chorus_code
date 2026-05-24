@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chorus-code"
+version = "0.1.0"
+description = "Multi-agent development swarm powered by Claude Code and git worktrees"
+requires-python = ">=3.11"
+dependencies = [
+    "rich>=13.0",
+    "pyyaml",
+]
+
+[project.scripts]
+chorus_code = "swarm:main"
+
+[tool.setuptools]
+py-modules = [
+    "swarm",
+    "agent",
+    "blackboard",
+    "filelock",
+    "init_tui",
+    "models",
+    "monitor",
+    "worktree",
+]

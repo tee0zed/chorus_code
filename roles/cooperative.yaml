@@ -1,0 +1,27 @@
+mode: cooperative
+stop_signal: DONE
+definitions: definitions.yaml
+
+groups:
+
+  - name: planning
+    roles:
+      - role: planner
+        count: 1
+
+  - name: dev
+    roles:
+      - role: developer
+        count: 3
+
+  - name: security
+    roles:
+      - role: security_analyst
+        count: 1
+        responds_to: [SUBTASK_DONE]   # override: в cooperative код приходит как SUBTASK_DONE
+        produces: SECURITY_DONE
+
+  - name: integration
+    roles:
+      - role: integrator
+        count: 1

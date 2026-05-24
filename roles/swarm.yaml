@@ -1,0 +1,25 @@
+mode: swarm
+stop_signal: DONE
+definitions: definitions.yaml
+
+groups:
+
+  - name: analysis
+    roles:
+      - role: researcher
+        count: 1
+
+  - name: development
+    roles:
+      - role: coder
+        count: 2
+
+  - name: security
+    roles:
+      - role: security_analyst
+        count: 1
+
+  - name: quality
+    roles:
+      - role: reviewer
+        count: 1

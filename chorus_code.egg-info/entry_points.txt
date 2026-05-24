@@ -1,0 +1,2 @@
+[console_scripts]
+chorus_code = swarm:main
