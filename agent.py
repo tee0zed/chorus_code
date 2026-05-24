@@ -57,6 +57,71 @@ def _parse_output(output: str) -> list[dict] | dict | None:
     return None
 
 
+def _run_codex(agent_id: str, prompt: str, worktree_path: str) -> str:
+    """Run codex CLI via PTY, return full output as plain text."""
+    master_fd, slave_fd = pty.openpty()
+    proc = subprocess.Popen(
+        ["codex", "--approval-mode", "full-auto", prompt],
+        cwd=worktree_path,
+        stdin=subprocess.DEVNULL,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        close_fds=True,
+    )
+    os.close(slave_fd)
+
+    buf = b""
+    lines: list[str] = []
+
+    try:
+        while True:
+            try:
+                r, _, _ = select.select([master_fd], [], [], 0.5)
+            except (ValueError, OSError):
+                break
+            if r:
+                try:
+                    chunk = os.read(master_fd, 4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                while b"\n" in buf:
+                    raw, buf = buf.split(b"\n", 1)
+                    line = _strip_ansi(raw.decode("utf-8", errors="replace")).strip()
+                    if line:
+                        lines.append(line)
+                        print(f"[{agent_id}] {line}", flush=True)
+            elif proc.poll() is not None:
+                try:
+                    while True:
+                        chunk = os.read(master_fd, 4096)
+                        if not chunk:
+                            break
+                        buf += chunk
+                except OSError:
+                    pass
+                for raw in buf.split(b"\n"):
+                    line = _strip_ansi(raw.decode("utf-8", errors="replace")).strip()
+                    if line:
+                        lines.append(line)
+                        print(f"[{agent_id}] {line}", flush=True)
+                break
+    finally:
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+    return "\n".join(lines)
+
+
 def _run_claude(agent_id: str, prompt: str, worktree_path: str) -> str:
     """Run claude via PTY so it line-buffers. Stream events to log in real time."""
     master_fd, slave_fd = pty.openpty()
@@ -254,7 +319,8 @@ def run_agent(
             try:
                 context = board.get_all_signals()
                 prompt = _build_prompt(task, role_config, signal, context)
-                output = _run_claude(agent_id, prompt, worktree_path)
+                provider = role_config.get("provider", "claude")
+                output = (_run_codex if provider == "codex" else _run_claude)(agent_id, prompt, worktree_path)
                 if can_modify:
                     wt_head_after = _repo_head(worktree_path)
             finally:

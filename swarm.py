@@ -219,18 +219,20 @@ def main():
     parser.add_argument("--mode")
     parser.add_argument("--agents")
     parser.add_argument("--timeout", type=int)
+    parser.add_argument("--provider", choices=["claude", "codex"], default=None)
     parser.add_argument("--no-tui", action="store_true")
     args = parser.parse_args()
 
     if not args.task:
         from init_tui import run as init_run
         cfg = init_run()
-        args.repo    = args.repo    or cfg.repo
-        args.task    = cfg.task
-        args.config  = args.config  or cfg.config
-        args.mode    = args.mode    or cfg.mode
-        args.agents  = args.agents  or cfg.agents
-        args.timeout = args.timeout or cfg.timeout
+        args.repo     = args.repo     or cfg.repo
+        args.task     = cfg.task
+        args.config   = args.config   or cfg.config
+        args.mode     = args.mode     or cfg.mode
+        args.agents   = args.agents   or cfg.agents
+        args.timeout  = args.timeout  or cfg.timeout
+        args.provider = args.provider or cfg.provider
 
     if not args.config:
         args.config = str(Path(__file__).parent / "roles" / "swarm.yaml")
@@ -242,7 +244,8 @@ def main():
     config = load_config(args.config, args.mode)
     if not args.agents:
         args.agents = config.get("default_agents", "researcher:1,coder:1,reviewer:1")
-    roles_by_name = {r["name"]: r for r in config["roles"]}
+    provider = getattr(args, "provider", None) or "claude"
+    roles_by_name = {r["name"]: {**r, "provider": provider} for r in config["roles"]}
     stop_signal = config.get("stop_signal", "DONE")
 
     wt._ensure_commit(args.repo)

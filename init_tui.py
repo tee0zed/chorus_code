@@ -28,6 +28,7 @@ class SwarmConfig:
     mode: str
     agents: str
     timeout: int
+    provider: str = "claude"
 
 
 def _banner():
@@ -142,6 +143,22 @@ def _pick_agents(mode_cfg: dict) -> str:
     return Prompt.ask("  Composition", default=default, console=console)
 
 
+def _pick_provider() -> str:
+    providers = [
+        ("claude", "Claude Code  (claude CLI)"),
+        ("codex",  "OpenAI Codex (codex CLI)"),
+    ]
+    console.print("  [bold]Provider[/bold]")
+    for i, (key, label) in enumerate(providers, 1):
+        console.print(f"    [cyan]{i}[/cyan]  {label}")
+    console.print()
+    while True:
+        choice = Prompt.ask("  Number", default="1", console=console)
+        if choice.isdigit() and 0 <= int(choice) - 1 < len(providers):
+            return providers[int(choice) - 1][0]
+        console.print(f"  [red]Enter 1 or 2[/red]")
+
+
 def _pick_task() -> str:
     console.print()
     console.print("  [bold]Task[/bold]")
@@ -166,12 +183,13 @@ def _summary(cfg: SwarmConfig):
     t = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
     t.add_column(style="dim", width=12)
     t.add_column()
-    t.add_row("repo",    cfg.repo)
-    t.add_row("config",  Path(cfg.config).name)
-    t.add_row("mode",    cfg.mode or "-")
-    t.add_row("agents",  cfg.agents)
-    t.add_row("timeout", f"{cfg.timeout}s")
-    t.add_row("task",    Text(cfg.task, style="bold"))
+    t.add_row("repo",     cfg.repo)
+    t.add_row("config",   Path(cfg.config).name)
+    t.add_row("mode",     cfg.mode or "-")
+    t.add_row("provider", cfg.provider)
+    t.add_row("agents",   cfg.agents)
+    t.add_row("timeout",  f"{cfg.timeout}s")
+    t.add_row("task",     Text(cfg.task, style="bold"))
     console.print(Panel(t, title="Launch parameters", border_style="blue"))
 
 
@@ -181,14 +199,15 @@ def run() -> SwarmConfig:
     config_path, mode, mode_cfg = _pick_mode_global()
     console.print()
 
-    repo    = _pick_repo()
-    task    = _pick_task()
-    agents  = _pick_agents(mode_cfg)
-    timeout = _pick_timeout()
+    provider = _pick_provider()
+    repo     = _pick_repo()
+    task     = _pick_task()
+    agents   = _pick_agents(mode_cfg)
+    timeout  = _pick_timeout()
 
     cfg = SwarmConfig(
         repo=repo, task=task, config=config_path,
-        mode=mode, agents=agents, timeout=timeout,
+        mode=mode, agents=agents, timeout=timeout, provider=provider,
     )
     _summary(cfg)
 
