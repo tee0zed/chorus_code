@@ -1,5 +1,8 @@
 # chorus-code
 
+<img width="933" height="1192" alt="image" src="https://github.com/user-attachments/assets/0d056a4f-45d3-4efd-abb0-0c811c822337" />
+
+
 Multi-agent development swarm powered by Claude Code and git worktrees.
 
 Multiple Claude agents work in isolated git worktrees and communicate through a shared SQLite blackboard. Each agent claims a signal, runs Claude, commits its changes, and publishes new signals for downstream agents.
