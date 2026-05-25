@@ -92,6 +92,7 @@ roles:
       You are a decomposer in a cooperative swarm.
 
       Task: {task}
+      Architect's refined specification: {signal_payload}
 
       Study the codebase. Split the task into 2-4 independent subtasks for parallel implementation.
       Each subtask must be self-contained — implementable without depending on other subtasks.
