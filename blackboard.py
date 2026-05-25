@@ -33,8 +33,10 @@ class Blackboard:
         claim_path = self._claim_path(signal_id)
         try:
             fd = os.open(str(claim_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, agent_id.encode())
-            os.close(fd)
+            try:
+                os.write(fd, agent_id.encode())
+            finally:
+                os.close(fd)
             return True
         except FileExistsError:
             # Check if stale
@@ -46,8 +48,10 @@ class Blackboard:
                     # Retry once after removing stale claim
                     try:
                         fd = os.open(str(claim_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                        os.write(fd, agent_id.encode())
-                        os.close(fd)
+                        try:
+                            os.write(fd, agent_id.encode())
+                        finally:
+                            os.close(fd)
                         return True
                     except FileExistsError:
                         return False
