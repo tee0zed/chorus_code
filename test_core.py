@@ -1,13 +1,12 @@
 """
 Core smoke tests — no Claude, no git worktrees, no subprocesses.
-Covers: Blackboard, FileLockManager, _build_prompt, _parse_output, load_config.
+Covers: Blackboard, _build_prompt, _parse_output, load_config.
 """
 import json
 import os
 import tempfile
 
 from blackboard import Blackboard
-from filelock import FileLockManager
 from models import Signal
 
 
@@ -84,36 +83,6 @@ def test_blackboard_claim_fifo():
         b.write(s2)
         c = b.claim_next(["T"], "a")
         assert c.id == s1.id  # FIFO
-
-
-# ── FileLockManager ───────────────────────────────────────────────────────────
-
-def test_filelock_acquire_release():
-    with tempfile.TemporaryDirectory() as tmp:
-        lm = FileLockManager(tmp)
-        assert lm.acquire("myfile", "agent-1")
-        assert not lm.acquire("myfile", "agent-2")  # already locked
-        assert lm.acquire("myfile", "agent-1")      # same agent re-acquires
-
-        lm.release_all("agent-1")
-        assert lm.acquire("myfile", "agent-2")      # now free
-
-
-def test_filelock_get_all():
-    with tempfile.TemporaryDirectory() as tmp:
-        lm = FileLockManager(tmp)
-        lm.acquire("f1", "a1")
-        lm.acquire("f2", "a1")
-        lm.acquire("f3", "a2")
-        locks = lm.get_all_locks()
-        assert locks.get("f1") == "a1"
-        assert locks.get("f3") == "a2"
-
-        lm.release_all("a1")
-        locks2 = lm.get_all_locks()
-        assert "f1" not in locks2
-        assert "f2" not in locks2
-        assert "f3" in locks2
 
 
 # ── _build_prompt ─────────────────────────────────────────────────────────────

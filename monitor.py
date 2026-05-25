@@ -11,7 +11,6 @@ from textual.containers import Horizontal
 from textual.widgets import DataTable, Input, Label, RichLog, Static
 
 from blackboard import Blackboard
-from filelock import FileLockManager
 
 _AGENT_PALETTE = [
     "cyan", "magenta", "green", "yellow",
@@ -159,13 +158,17 @@ class _SwarmApp(App):
     def _upd_locks(self) -> None:
         dt = self.query_one("#locks", DataTable)
         dt.clear()
+        # Show active per-signal claim files (lock-free cooperative model)
         try:
-            locks = FileLockManager(self.db_path).get_all_locks()
+            claims = {
+                f.stem: f.read_text(errors="replace").strip()
+                for f in (Path(self.db_path) / "signals").glob("*.claim")
+            }
         except Exception:
-            locks = {}
-        for fp, agent in locks.items():
-            dt.add_row(fp, Text(agent, style="cyan"))
-        if not locks:
+            claims = {}
+        for sig_id, agent in claims.items():
+            dt.add_row(sig_id[:16], Text(agent, style="cyan"))
+        if not claims:
             dt.add_row(Text("(none)", style="dim"), "")
 
     def _upd_log(self) -> None:
