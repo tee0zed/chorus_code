@@ -7,8 +7,11 @@ groups:
 
   - name: planning
     roles:
+      - role: architect
+        count: 1
       - role: decomposer
         count: 1
+        responds_to: [TASK_READY]
 
   - name: development
     roles:

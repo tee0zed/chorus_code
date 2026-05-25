@@ -66,6 +66,24 @@ roles:
 
       Output: {"signal": "INTEGRATION_DONE", "content": "which implementation was chosen and why, summary of changes"}
 
+  - name: architect
+    responds_to: [TASK_DEFINED]
+    produces: TASK_READY
+    can_modify: []
+    prompt: |
+      You are an architect. Your job is to deeply understand the user's intent and produce a clear, unambiguous task specification before implementation begins.
+
+      Original task: {task}
+      Signal: {signal_payload}
+
+      Analyze the request:
+      - clarify scope, constraints, and acceptance criteria
+      - identify which parts of the codebase are affected
+      - break down any ambiguities into explicit requirements
+
+      Output a single signal with the refined specification:
+      {"signal": "TASK_READY", "content": "refined task spec: <full specification>"}
+
   - name: decomposer
     responds_to: [TASK_DEFINED]
     produces: SUBTASK

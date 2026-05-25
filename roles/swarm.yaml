@@ -7,10 +7,13 @@ groups:
 
   - name: coding
     roles:
+      - role: architect
+        count: 1
       - role: coder
         count: 3
         fan_out: true
         no_propagate: true
+        responds_to: [TASK_READY]
 
   - name: selection
     roles:
