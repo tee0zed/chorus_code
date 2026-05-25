@@ -1,5 +1,6 @@
 import re
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event
@@ -42,6 +43,15 @@ class _SwarmApp(App):
         border: solid #2a2a2a;
     }
 
+    #report  {
+        height: auto;
+        max-height: 20;
+        border: solid #336600;
+        background: #0a1a00;
+        padding: 0 1;
+        display: none;
+    }
+
     #signals {
         height: 10;
         border: solid #003366;
@@ -78,6 +88,7 @@ class _SwarmApp(App):
     def compose(self) -> ComposeResult:
         yield Static("", id="header")
         yield RichLog(id="log", highlight=False, markup=False, wrap=True, max_lines=5000)
+        yield RichLog(id="report", highlight=False, markup=False, wrap=True, max_lines=500)
         yield DataTable(id="signals", zebra_stripes=True)
         yield DataTable(id="locks")
         with Horizontal(id="footer"):
@@ -94,14 +105,20 @@ class _SwarmApp(App):
         lk.add_columns("File", "Agent")
 
         self.query_one("#log", RichLog).border_title = "Agent log  [dim](Ctrl+L — copy path)[/]"
+        self.query_one("#report", RichLog).border_title = "Report"
         self.query_one("#signals", DataTable).border_title = "Blackboard"
         self.query_one("#locks", DataTable).border_title = "File Locks"
         self.set_interval(0.5, self._tick)
 
     # ------------------------------------------------------------------ #
 
-    def set_complete(self) -> None:
+    def set_complete(self, report: str = "") -> None:
         self._complete = True
+        if report:
+            rlog = self.query_one("#report", RichLog)
+            rlog.display = True
+            for line in report.splitlines():
+                rlog.write(Text(line, style="bright_green"))
         self.query_one("#footer").display = True
         self.query_one("#task-input", Input).focus()
 
@@ -213,20 +230,22 @@ class SwarmMonitor:
     def __init__(self, db_path: str, task: str, run_id: str, log_path: str):
         self._app = _SwarmApp(db_path, task, run_id, log_path)
 
-    def set_complete(self) -> None:
+    def set_complete(self, report: str = "") -> None:
         try:
-            self._app.call_from_thread(self._app.set_complete)
+            self._app.call_from_thread(self._app.set_complete, report)
         except Exception:
-            self._app.set_complete()
+            self._app.set_complete(report)
 
     def run(self, stop: Event, **_) -> str | None:
         """Block until user exits TUI. Returns next task string or None."""
         def _watch() -> None:
             stop.wait()
             if not self._app._complete:
-                try:
-                    self._app.call_from_thread(self._app.exit, None)
-                except Exception:
-                    pass
+                for _ in range(20):
+                    try:
+                        self._app.call_from_thread(self._app.exit, None)
+                        return
+                    except Exception:
+                        time.sleep(0.2)
         threading.Thread(target=_watch, daemon=True).start()
         return self._app.run()

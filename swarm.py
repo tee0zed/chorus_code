@@ -82,20 +82,25 @@ def _agent_worker(role_config, task, repo_path, db_path, run_dir, stop_signal, l
             print(f"[agent] FATAL: {e}", flush=True)
 
 
-def _write_report(db_path: str, stop_signal: str, log_path: str):
-    """Extract final content from stop signal and append to log."""
+def _get_report_content(db_path: str, stop_signal: str) -> str:
     try:
         sig = Blackboard(db_path).get_last(stop_signal)
     except Exception:
-        return
+        return ""
     if not sig:
-        return
-    content = sig.get("payload", {}).get("content", "").strip()
+        return ""
+    return sig.get("payload", {}).get("content", "").strip()
+
+
+def _write_report(db_path: str, stop_signal: str, log_path: str) -> str:
+    """Extract final content from stop signal, append to log, and return it."""
+    content = _get_report_content(db_path, stop_signal)
     if not content:
-        return
+        return ""
     sep = "=" * 60
     with open(log_path, "a") as f:
         f.write(f"\n{sep}\n[swarm] REPORT:\n{content}\n{sep}\n")
+    return content
 
 
 def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
@@ -135,6 +140,10 @@ def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
     with open(log_path, "a") as f:
         f.write(f"[swarm] run_id={run_id}  db={db_path}\n")
         f.write(f"[swarm] {len(processes)} agents started\n")
+
+    if not processes:
+        print(f"[swarm] ERROR: no agents started — check role names in --agents and config.\nlog: {log_path}", file=sys.stderr)
+        return None
 
     if args.no_tui:
         # No TUI: watch loop runs in main thread
@@ -177,9 +186,9 @@ def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
                 if board.has_signal_of_type(stop_signal):
                     with open(log_path, "a") as f:
                         f.write(f"[swarm] stop signal '{stop_signal}' received\n")
-                    _write_report(db_path, stop_signal, log_path)
+                    report = _write_report(db_path, stop_signal, log_path)
                     completed = True
-                    monitor.set_complete()  # uses call_from_thread internally
+                    monitor.set_complete(report)  # uses call_from_thread internally
                     return  # don't set stop_event — TUI waits for user input
                 if not any(p.is_alive() for p in processes):
                     with open(log_path, "a") as f:
