@@ -156,7 +156,7 @@ def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
         for p in processes:
             p.join(timeout=5)
         if not completed:
-            print(f"Completed (no stop_signal). log: {log_path}")
+            print(f"Terminated (timeout or no stop signal). log: {log_path}")
             return None
         print(f"\nTask completed. log: {log_path}\n")
         try:
