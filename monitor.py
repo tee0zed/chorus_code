@@ -57,7 +57,8 @@ class _SwarmApp(App):
         display: none;
     }
     #footer Label  { width: auto; padding: 0 1 0 0; color: #00cc00; }
-    #task-input    { width: 1fr; }
+    #task-input    { width: 1fr; color: #00ff00; }
+    #task-input Input { color: #00ff00; background: transparent; }
     """
 
     BINDINGS = [
