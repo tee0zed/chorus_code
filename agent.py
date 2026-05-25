@@ -10,7 +10,6 @@ from pathlib import Path
 
 import worktree as wt
 from blackboard import Blackboard
-from filelock import FileLockManager
 from models import Signal
 
 _ANSI_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
@@ -275,7 +274,6 @@ def run_agent(
     agent_id = f"{role_name}-{uuid.uuid4().hex[:8]}"
 
     board = Blackboard(db_path)
-    locks = FileLockManager(db_path)
 
     # Worktrees created per-signal so each run starts from current HEAD,
     # which includes commits propagated by earlier agents.
@@ -292,21 +290,6 @@ def run_agent(
                 continue
 
             print(f"[{agent_id}] claimed {signal.type} ({signal.id[:8]})", flush=True)
-
-            if can_modify:
-                locked_files = locks.get_all_locks()
-                # Global mutex: block if ANY lock is held by another agent.
-                # This prevents git cherry-pick conflicts on overlapping file sets.
-                blocked = [f for f, holder in locked_files.items() if holder != agent_id]
-                if blocked:
-                    print(f"[{agent_id}] waiting, locked by others: {blocked}", flush=True)
-                    board.unclaim(signal.id)
-                    time.sleep(5)
-                    continue
-                if not locks.acquire(f"__signal__{signal.id}", agent_id):
-                    board.unclaim(signal.id)
-                    time.sleep(2)
-                    continue
 
             # Fresh worktree from current HEAD — sees all previous agents' commits
             worktree_path = str(Path(run_dir) / f"{agent_id}-{signal.id[:8]}")
@@ -358,8 +341,6 @@ def run_agent(
                 print(f"[{agent_id}] wrote {signal_type}", flush=True)
 
             board.mark_done(signal.id)
-            locks.release_all(agent_id)
 
     finally:
-        locks.release_all(agent_id)
         print(f"[{agent_id}] done", flush=True)
