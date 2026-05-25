@@ -33,11 +33,18 @@ class SwarmConfig:
 
 def _banner():
     title = Text()
-    title.append("  ⬡ ", style="bold yellow")
-    title.append("Agent Swarm", style="bold white")
-    title.append(" ⬡  ", style="bold yellow")
+    title.append(" ♬ ", style="bold magenta")
+    title.append("Chorus", style="bold cyan")
+    title.append(" Code", style="bold white")
+    title.append(" ♬ ", style="bold magenta")
+    subtitle = Text()
+    subtitle.append("  agent swarm • parallel • autonomous  ", style="dim cyan")
+    combined = Text()
+    combined.append_text(title)
+    combined.append("\n")
+    combined.append_text(subtitle)
     console.print()
-    console.print(Panel(title, border_style="blue", expand=False, padding=(0, 4)))
+    console.print(Panel(combined, border_style="bright_magenta", expand=False, padding=(0, 3)))
     console.print()
 
 

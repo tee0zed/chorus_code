@@ -205,7 +205,7 @@ def _run_swarm(args, roles_by_name: dict, stop_signal: str) -> str | None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Agent Swarm")
+    parser = argparse.ArgumentParser(description="Chorus Code — parallel autonomous agent swarm")
     parser.add_argument("--repo")
     parser.add_argument("--task")
     parser.add_argument("--config")

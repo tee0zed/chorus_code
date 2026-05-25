@@ -137,7 +137,7 @@ class _SwarmApp(App):
         task_s = self._task[:80] + "…" if len(self._task) > 80 else self._task
         done = "  [bold green]✓ DONE[/]" if self._complete else ""
         self.query_one("#header", Static).update(
-            f"[bold cyan]Agent Swarm[/]  [dim]run:{self.run_id}[/]"
+            f"[bold magenta]♬[/] [bold cyan]Chorus Code[/]  [dim]run:{self.run_id}[/]"
             f"  [cyan]{self._elapsed()}[/]{done}\n"
             f"[dim]{task_s}[/]\n"
             f"[dim]log: {self.log_path}[/]"
