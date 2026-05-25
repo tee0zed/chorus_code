@@ -294,8 +294,8 @@ def run_agent(
             # Fresh worktree from current HEAD — sees all previous agents' commits
             worktree_path = str(Path(run_dir) / f"{agent_id}-{signal.id[:8]}")
             wt.add(repo_path, worktree_path)
-            wt.apply_permissions(worktree_path, can_modify)
             wt.write_claude_md(worktree_path, role_name, role_config["prompt"], can_modify)
+            wt.apply_permissions(worktree_path, can_modify)
 
             head_before = _repo_head(repo_path) if can_modify else ""
             wt_head_after = ""
