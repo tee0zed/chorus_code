@@ -1,5 +1,5 @@
-import fcntl
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -13,8 +13,6 @@ class Blackboard:
     def __init__(self, path: str):
         self._dir = Path(path) / "signals"
         self._dir.mkdir(parents=True, exist_ok=True)
-        self._lockfile = Path(path) / ".claim_lock"
-        self._lockfile.touch()
 
     def _load_all(self) -> list[dict]:
         result = []
@@ -27,6 +25,35 @@ class Blackboard:
 
     def _path(self, signal_id: str) -> Path:
         return self._dir / f"{signal_id}.json"
+
+    def _claim_path(self, signal_id: str) -> Path:
+        return self._dir / f"{signal_id}.claim"
+
+    def _try_atomic_claim(self, signal_id: str, agent_id: str) -> bool:
+        claim_path = self._claim_path(signal_id)
+        try:
+            fd = os.open(str(claim_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, agent_id.encode())
+            os.close(fd)
+            return True
+        except FileExistsError:
+            # Check if stale
+            try:
+                mtime = claim_path.stat().st_mtime
+                age = datetime.now().timestamp() - mtime
+                if age > CLAIM_TIMEOUT_SECONDS:
+                    claim_path.unlink(missing_ok=True)
+                    # Retry once after removing stale claim
+                    try:
+                        fd = os.open(str(claim_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                        os.write(fd, agent_id.encode())
+                        os.close(fd)
+                        return True
+                    except FileExistsError:
+                        return False
+            except OSError:
+                pass
+            return False
 
     def write(self, signal: Signal):
         data = {
@@ -42,42 +69,58 @@ class Blackboard:
         self._path(signal.id).write_text(json.dumps(data))
 
     def claim_next(self, responds_to: list[str], agent_id: str) -> Optional[Signal]:
-        timeout_cutoff = (
-            datetime.now(timezone.utc) - timedelta(seconds=CLAIM_TIMEOUT_SECONDS)
-        ).isoformat()
+        signals = self._load_all()
+        candidates = [
+            s for s in signals
+            if s["type"] in responds_to and s["status"] in ("open", "claimed")
+        ]
 
-        with open(self._lockfile, "a") as lf:
-            fcntl.flock(lf, fcntl.LOCK_EX)
+        for s in candidates:
+            signal_id = s["id"]
+
+            # Skip non-open unless we can reclaim a stale claimed signal
+            if s["status"] == "claimed":
+                claim_path = self._claim_path(signal_id)
+                try:
+                    mtime = claim_path.stat().st_mtime
+                    age = datetime.now().timestamp() - mtime
+                    if age <= CLAIM_TIMEOUT_SECONDS:
+                        continue
+                    # Stale — fall through to attempt atomic claim
+                except OSError:
+                    # No claim file but status=claimed: stale state, try to reclaim
+                    pass
+
+            if not self._try_atomic_claim(signal_id, agent_id):
+                continue
+
+            # We own the claim file — update JSON status
+            now = datetime.now(timezone.utc).isoformat()
             try:
-                signals = self._load_all()
-                for s in signals:
-                    if s["status"] == "claimed" and s["claimed_at"] < timeout_cutoff:
-                        s.update(status="open", claimed_by="", claimed_at="")
-                        self._path(s["id"]).write_text(json.dumps(s))
+                current = json.loads(self._path(signal_id).read_text())
+            except (json.JSONDecodeError, OSError):
+                self._claim_path(signal_id).unlink(missing_ok=True)
+                continue
 
-                candidates = [
-                    s for s in signals
-                    if s["type"] in responds_to and s["status"] == "open"
-                ]
-                if not candidates:
-                    return None
+            # Another agent may have already marked it done/claimed
+            if current["status"] not in ("open", "claimed"):
+                self._claim_path(signal_id).unlink(missing_ok=True)
+                continue
 
-                chosen = candidates[0]
-                now = datetime.now(timezone.utc).isoformat()
-                chosen.update(status="claimed", claimed_by=agent_id, claimed_at=now)
-                self._path(chosen["id"]).write_text(json.dumps(chosen))
+            current.update(status="claimed", claimed_by=agent_id, claimed_at=now)
+            self._path(signal_id).write_text(json.dumps(current))
 
-                return Signal(
-                    id=chosen["id"],
-                    type=chosen["type"],
-                    payload=chosen["payload"],
-                    from_role=chosen["from_role"],
-                    created_at=chosen["created_at"],
-                    claimed_by=agent_id,
-                    status="claimed",
-                )
-            finally:
-                fcntl.flock(lf, fcntl.LOCK_UN)
+            return Signal(
+                id=signal_id,
+                type=current["type"],
+                payload=current["payload"],
+                from_role=current["from_role"],
+                created_at=current["created_at"],
+                claimed_by=agent_id,
+                status="claimed",
+            )
+
+        return None
 
     def unclaim(self, signal_id: str):
         p = self._path(signal_id)
@@ -87,6 +130,7 @@ class Blackboard:
             p.write_text(json.dumps(s))
         except (json.JSONDecodeError, OSError):
             pass
+        self._claim_path(signal_id).unlink(missing_ok=True)
 
     def mark_done(self, signal_id: str):
         p = self._path(signal_id)
@@ -96,6 +140,7 @@ class Blackboard:
             p.write_text(json.dumps(s))
         except (json.JSONDecodeError, OSError):
             pass
+        self._claim_path(signal_id).unlink(missing_ok=True)
 
     def get_all_signals(self, limit: int = 30) -> list[dict]:
         return [
