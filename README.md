@@ -1,4 +1,4 @@
-# chorus-code - educational purpose neuroslopped agent orchestrator
+# chorus-code - educational purpose neuroslopped agent orchestrator (bugged as hell)
 
 <img width="933" height="1192" alt="image" src="https://github.com/user-attachments/assets/0d056a4f-45d3-4efd-abb0-0c811c822337" />
 
